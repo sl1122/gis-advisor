@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autogis"
+version = "0.1.0"
+description = "Local GIS workflow assistant powered by QGIS and open-source geospatial tools."
+requires-python = ">=3.10"
+dependencies = [
+  "matplotlib>=3.8",
+  "numpy>=1.26",
+  "openpyxl>=3.1",
+  "pandas>=2.2",
+  "pdfplumber>=0.11.0",
+  "pypdf>=6.0",
+  "whitebox>=2.3.6",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["autogis*"]

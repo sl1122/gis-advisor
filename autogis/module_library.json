@@ -1,0 +1,248 @@
+{
+  "version": "2026-06-20",
+  "design_principles": [
+    "Use the web UI as a task planner and execution cockpit, not a replacement for QGIS.",
+    "Prefer mature processing backends: QGIS Processing, GDAL, GRASS, SAGA, WhiteboxTools, Orfeo Toolbox, and QGIS plugins exposed as Processing providers.",
+    "Separate task understanding, data-role mapping, parameter confirmation, execution, and result review.",
+    "Turn training-reflection mistakes into pre-run checks."
+  ],
+  "sources": [
+    {
+      "name": "QGIS Model Designer",
+      "url": "https://docs.qgis.org/latest/en/docs/user_manual/processing/modeler.html",
+      "use": "Use model/workflow thinking: chain many algorithms and run them as one repeatable process."
+    },
+    {
+      "name": "QGIS Processing Guide",
+      "url": "https://docs.qgis.org/latest/en/docs/training_manual/processing/index.html",
+      "use": "Use Processing algorithms, logs, raster calculator, CRS handling, and external algorithms as the backend pattern."
+    },
+    {
+      "name": "QNEAT3",
+      "url": "https://github.com/root676/QNEAT3",
+      "use": "Network analysis should be integrated as Processing provider algorithms, not as isolated custom UI."
+    },
+    {
+      "name": "Orfeo Toolbox",
+      "url": "https://www.orfeo-toolbox.org/CookBook/",
+      "use": "Remote-sensing modules should be callable from command line, Python, or QGIS."
+    },
+    {
+      "name": "WhiteboxTools",
+      "url": "https://www.whiteboxgeo.com/manual/wbt_book/available_tools/hydrological_analysis.html",
+      "use": "Terrain, hydrology, raster and geomorphometry tools can fill gaps in QGIS Processing."
+    }
+  ],
+  "modules": [
+    {
+      "id": "task_splitter",
+      "title": "题目拆解与题组管理",
+      "category": "题目理解",
+      "keywords": ["第1题", "第2题", "第3题", "空", "图", "成果", "答卷", "数据"],
+      "input_roles": ["question"],
+      "optional_roles": ["document"],
+      "backend": ["local_rules", "llm"],
+      "status_policy": "needs_confirmation",
+      "steps": ["提取题目正文", "按题号/数据文件夹拆分题组", "抽取空格答案、图件要求和成果文件", "列出缺失参数和人工操作"],
+      "outputs": ["task_groups.json", "question_outline.md"],
+      "checks": ["不要把多道题合并成一个流程", "题组应绑定对应 Data 文件夹", "图件要求和数值空格要分开管理"],
+      "blockers": ["题目正文无法提取时需要用户粘贴或 OCR"]
+    },
+    {
+      "id": "data_standardize",
+      "title": "数据标准化与预处理",
+      "category": "数据预处理",
+      "keywords": ["投影", "坐标系", "裁剪", "掩膜", "重采样", "格式", "NoData", "范围", "处理范围"],
+      "input_roles": ["dem", "raster", "remote_sensing", "vector", "boundary"],
+      "optional_roles": ["table"],
+      "backend": ["GDAL", "QGIS Processing"],
+      "status_policy": "ready_when_any_input",
+      "steps": ["识别坐标系和像元大小", "ArcInfo Grid 转 GeoTIFF", "统一输出工作目录", "必要时投影/裁剪/掩膜", "生成数据检查报告"],
+      "outputs": ["standardized_inputs/", "data_check_report.json"],
+      "checks": ["距离和面积分析必须使用投影坐标系", "ArcInfo Grid 先转 GeoTIFF 可减少插件兼容问题", "输出路径避免过长和特殊字符"],
+      "blockers": ["目标投影或处理范围不明确时需要确认"]
+    },
+    {
+      "id": "vector_overlay_area",
+      "title": "矢量叠置、缓冲与面积统计",
+      "category": "矢量分析",
+      "keywords": ["缓冲", "相交", "擦除", "融合", "面积", "距离", "噪声", "道路", "建筑", "选址"],
+      "input_roles": ["vector", "boundary"],
+      "optional_roles": ["table"],
+      "backend": ["QGIS Processing", "GDAL/OGR"],
+      "status_policy": "needs_mapping",
+      "steps": ["检查投影", "选择输入层和约束层", "缓冲/相交/擦除", "融合或分组汇总", "重算面积/长度字段", "生成统计表和专题图草稿"],
+      "outputs": ["overlay_result.gpkg", "area_summary.csv", "overlay_map_draft.qgz"],
+      "checks": ["擦除顺序不能反", "裁剪/相交/融合后必须重算面积", "空间连接不等于相交统计"],
+      "blockers": ["需要确认保留图层、擦除图层、缓冲距离和汇总字段"]
+    },
+    {
+      "id": "field_calculator",
+      "title": "字段计算与属性表处理",
+      "category": "属性处理",
+      "keywords": ["字段", "属性表", "连接", "Join", "Null", "编号", "类型", "计算"],
+      "input_roles": ["vector", "table", "boundary"],
+      "optional_roles": [],
+      "backend": ["QGIS Processing", "PyQGIS", "OGR SQL"],
+      "status_policy": "needs_mapping",
+      "steps": ["识别字段名和字段类型", "表格连接或空间连接", "字段计算", "Null 比例检查", "导出属性表结果"],
+      "outputs": ["joined_attributes.gpkg", "attribute_qc.csv"],
+      "checks": ["连接字段要检查空格、全角半角和大小写", "数字参与拼接前转文本", "连接后先查 Null 再进入下一步"],
+      "blockers": ["需要确认连接字段、计算公式和输出字段类型"]
+    },
+    {
+      "id": "raster_calculator_reclass",
+      "title": "栅格计算、重分类与 NoData 修复",
+      "category": "栅格分析",
+      "keywords": ["重分类", "栅格计算", "Con", "SetNull", "NoData", "土地利用", "耕地", "编码"],
+      "input_roles": ["raster", "remote_sensing", "dem"],
+      "optional_roles": ["boundary", "table"],
+      "backend": ["QGIS Processing", "GDAL", "SAGA"],
+      "status_policy": "needs_confirmation",
+      "steps": ["确认分类编码表", "重分类或提取目标类别", "NoData 修复", "栅格计算表达式", "输出分类图和统计表"],
+      "outputs": ["reclassified.tif", "calculator_result.tif", "class_area.csv"],
+      "checks": ["离散栅格重采样用最近邻", "NoData 会在栅格计算中传播", "分类图用分类符号系统，连续图用拉伸符号系统"],
+      "blockers": ["分类编码、目标类别或表达式需要确认"]
+    },
+    {
+      "id": "remote_sensing_otb",
+      "title": "遥感指数、分类与变化检测",
+      "category": "遥感处理",
+      "keywords": ["遥感", "影像", "波段", "NDVI", "分类", "监督分类", "变化检测", "精度评价", "夜间灯光"],
+      "input_roles": ["remote_sensing", "raster"],
+      "optional_roles": ["boundary", "table"],
+      "backend": ["Orfeo Toolbox", "QGIS Processing", "GDAL"],
+      "status_policy": "needs_confirmation",
+      "steps": ["检查波段顺序和 NoData", "裁剪研究区", "指数计算或特征构建", "分类/分割/变化检测", "精度评价和制图"],
+      "outputs": ["index.tif", "classified.tif", "change_map.tif", "accuracy_report.csv"],
+      "checks": ["必须确认波段顺序", "训练样本和分类体系要一致", "大影像优先使用 OTB/GDAL 命令行避免 UI 卡顿"],
+      "blockers": ["需要确认波段含义、样本数据或分类体系"]
+    },
+    {
+      "id": "terrain_analysis",
+      "title": "地形分析：坡度、坡向、山体阴影、复杂度",
+      "category": "地形分析",
+      "keywords": ["DEM", "坡度", "坡向", "山体阴影", "地形", "高程", "TCI", "复杂度"],
+      "input_roles": ["dem"],
+      "optional_roles": ["boundary"],
+      "backend": ["QGIS Processing", "GDAL", "WhiteboxTools"],
+      "status_policy": "ready",
+      "steps": ["检查 DEM 投影和像元大小", "坡度", "坡向", "山体阴影", "邻域高差/地形复杂度", "结果拉伸符号系统"],
+      "outputs": ["slope.tif", "aspect.tif", "hillshade.tif", "terrain_complexity.tif"],
+      "checks": ["连续栅格用拉伸显示", "坡度单位要确认是度还是百分比", "山体阴影是表现用底图，不等于分类结果"],
+      "blockers": []
+    },
+    {
+      "id": "building_sunlight",
+      "title": "建筑日照分析：背光面、太阳阴影与候选点判读",
+      "category": "3D/日照分析",
+      "keywords": ["日照", "建筑日照", "太阳阴影", "背光面", "冬至", "sunlight", "sun shadow", "solar", "building shadow"],
+      "input_roles": ["vector", "boundary"],
+      "optional_roles": ["dem", "raster", "table"],
+      "backend": ["QGIS Processing native:hillshade", "GDAL", "PyQGIS", "ArcGIS Sun Shadow Volume reference"],
+      "status_policy": "needs_mapping",
+      "steps": ["建筑面或建筑轮廓转面", "高度字段：楼层数×层高", "面转栅格生成建筑高度面", "NoData赋0形成连续高程面", "坡向分析", "重分类提取背光面", "背光面二值栅格×建筑高度", "QGIS原生Hillshade按太阳方位角/高度角生成光照栅格", "候选建筑质心或候选点提取阴影值判读", "如题目要求3D投影阴影体，则转入Sun Shadow Volume参考步骤"],
+      "outputs": ["building_height_zero.tif", "building_aspect.tif", "backlit_binary.tif", "backlit_height.tif", "building_shadow.tif", "candidate_sunlight_judgement.gpkg"],
+      "checks": ["建筑栅格NoData必须赋0，否则坡向和Hillshade会大面积空缺", "背光面不能直接用0/1二值栅格跑Hillshade，必须先乘建筑真实高度", "QGIS原生Hillshade是光照栅格表达，不等价于ArcGIS完整3D太阳阴影体", "冬至日12时训练样例：太阳方位角180°，太阳高度角44.3°，背光面坡向为[0,90]∪[270,360]", "3D场景题优先查找太阳阴影体Sun Shadow Volume或对应插件/后端，不要手算太阳角"],
+      "blockers": ["需要确认建筑图层、高度字段或楼层字段、像元大小、候选点/质心点、太阳方位角和高度角"]
+    },
+    {
+      "id": "hydrology_whitebox",
+      "title": "水文分析：填洼、流向、流量、河网、流域",
+      "category": "水文分析",
+      "keywords": ["水文", "填洼", "流向", "流量", "汇流", "河网", "流域", "TWI", "集水面积"],
+      "input_roles": ["dem"],
+      "optional_roles": ["boundary", "vector"],
+      "backend": ["WhiteboxTools", "GRASS", "QGIS Processing"],
+      "status_policy": "needs_confirmation",
+      "steps": ["标准化 DEM 为 GeoTIFF", "填洼", "D8 指针/流向", "流量累积", "阈值提取河网", "河网矢量化或流域提取"],
+      "outputs": ["filled_dem.tif", "d8_pointer.tif", "flow_accumulation.tif", "streams.tif", "streams.gpkg"],
+      "checks": ["水文分析第一步必须填洼", "阈值要用像元面积换算", "TWI 的零值处理结果不要串用于河网提取"],
+      "blockers": ["河网阈值、出水口或目标集水面积需要确认"]
+    },
+    {
+      "id": "viewshed_analysis",
+      "title": "可视域与观察点分析",
+      "category": "3D/可视域",
+      "keywords": ["可视域", "可见", "观察点", "OFFSETA", "瞭望塔", "视域", "人工DEM"],
+      "input_roles": ["dem"],
+      "optional_roles": ["vector", "boundary"],
+      "backend": ["QGIS Processing", "GRASS", "WhiteboxTools"],
+      "status_policy": "needs_mapping",
+      "steps": ["确认观察点或生成候选点", "提取点位地表高程", "设置观察高度", "可视域计算", "可视面积统计", "专题图输出"],
+      "outputs": ["observer_points.gpkg", "viewshed.tif", "viewshed_area.gpkg"],
+      "checks": ["OFFSETA 不是绝对高程", "不可见像元应作为 NoData", "可视域面积统计必须使用投影坐标系"],
+      "blockers": ["需要确认候选点图层、观察高度字段和可视半径"]
+    },
+    {
+      "id": "zonal_statistics",
+      "title": "分区统计与指标回连",
+      "category": "统计分析",
+      "keywords": ["分区统计", "区域统计", "乡镇", "行政区", "均值", "总和", "GDP", "指标"],
+      "input_roles": ["boundary", "raster"],
+      "optional_roles": ["dem", "remote_sensing", "table"],
+      "backend": ["QGIS Processing", "exactextract", "GDAL"],
+      "status_policy": "needs_mapping",
+      "steps": ["选择分区面和指标栅格", "分区统计", "结果回连", "Null 检查", "指标标准化和专题图"],
+      "outputs": ["zonal_statistics.csv", "joined_indicators.gpkg", "indicator_map.pdf"],
+      "checks": ["区划与栅格范围/坐标系要一致", "回连后必须检查 Null", "统计字段命名要能追溯"],
+      "blockers": ["需要确认分区图层、值栅格和统计类型"]
+    },
+    {
+      "id": "suitability_mce",
+      "title": "选址适宜性与多准则评价",
+      "category": "选址评价",
+      "keywords": ["选址", "适宜性", "候选", "约束", "权重", "评价", "排除", "最优"],
+      "input_roles": ["dem", "raster", "vector", "boundary"],
+      "optional_roles": ["table"],
+      "backend": ["QGIS Processing", "WhiteboxTools", "GDAL"],
+      "status_policy": "needs_confirmation",
+      "steps": ["约束区排除", "因子标准化", "权重叠加", "候选区提取", "候选点排序", "制图输出"],
+      "outputs": ["constraints.gpkg", "suitability.tif", "candidates.gpkg", "ranking.csv"],
+      "checks": ["约束因子和评价因子不要混用", "权重需要可解释", "结果分类断点要写进图例"],
+      "blockers": ["需要确认权重、阈值、约束条件和排序规则"]
+    },
+    {
+      "id": "network_qneat3",
+      "title": "网络分析：最近设施、服务区、OD 矩阵",
+      "category": "网络分析",
+      "keywords": ["网络分析", "最短路径", "路径规划", "可达性", "最近设施", "服务区", "OD矩阵", "OD 矩阵", "道路网络", "通行成本", "network analysis", "shortest path", "service area"],
+      "input_roles": ["vector"],
+      "optional_roles": ["table", "boundary"],
+      "backend": ["QNEAT3", "QGIS Network Analysis"],
+      "status_policy": "needs_plugin",
+      "steps": ["检查道路网络拓扑", "构建成本字段", "最近设施/服务区/OD 矩阵", "结果统计", "可达性制图"],
+      "outputs": ["network_result.gpkg", "od_matrix.csv", "service_area.gpkg"],
+      "checks": ["网络数据必须可连通", "距离/时间成本字段要明确", "最近设施点可能需要排除自身匹配"],
+      "blockers": ["需要安装或启用 QNEAT3，并确认网络成本字段"]
+    },
+    {
+      "id": "vector_edit_geometry",
+      "title": "矢量编辑与几何处理：创建、移动、旋转、切割、划分",
+      "category": "矢量编辑",
+      "keywords": ["创建要素", "新增要素", "绘制", "数字化", "移动", "平移", "旋转", "切割", "分割", "划分", "裁剪", "分块", "鱼网", "create feature", "digitize", "move", "translate", "rotate", "split", "cut", "clip", "subdivide"],
+      "input_roles": ["vector", "boundary"],
+      "optional_roles": ["table", "document"],
+      "backend": ["QGIS Processing", "PyQGIS", "QGIS edit session"],
+      "status_policy": "needs_mapping",
+      "steps": ["确认目标图层和几何类型", "必要时进入创建/编辑要素半自动步骤", "移动或旋转要素", "按线切割或按边界裁剪", "划分复杂面或生成分块结果", "检查拓扑、面积、长度和属性继承"],
+      "outputs": ["created_features.gpkg", "translated_features.gpkg", "rotated_features.gpkg", "split_features.gpkg", "clipped_features.gpkg", "subdivided_features.gpkg"],
+      "checks": ["编辑类任务必须确认坐标系、捕捉、拓扑规则和属性字段", "移动量使用当前投影坐标单位", "旋转必须确认角度方向和旋转中心", "切割线必须真正穿过目标要素", "裁剪、相交、擦除不是同一种结果"],
+      "blockers": ["创建要素如果没有坐标、构造规则或草图，必须由用户确认几何位置", "移动、旋转、划分参数需要在执行前确认"]
+    },
+    {
+      "id": "cartography_export",
+      "title": "制图输出与符号系统检查",
+      "category": "制图输出",
+      "keywords": ["制图", "图例", "比例尺", "指北针", "专题图", "布局", "导出", "颜色"],
+      "input_roles": ["dem", "raster", "remote_sensing", "vector", "boundary"],
+      "optional_roles": ["table"],
+      "backend": ["QGIS Layout", "PyQGIS", "qgis2web reference"],
+      "status_policy": "needs_confirmation",
+      "steps": ["识别图层类型", "应用符号系统建议", "生成布局草稿", "检查图例/比例尺/指北针/单位", "导出 PNG/PDF"],
+      "outputs": ["layout.qpt", "map_output.png", "map_output.pdf"],
+      "checks": ["连续栅格用拉伸，离散栅格用分类", "图例必须解释编码含义", "竞赛图件通常需要清晰可辨和单位标注"],
+      "blockers": ["需要确认图名、输出比例尺、分类断点和配色风格"]
+    }
+  ]
+}

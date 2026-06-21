@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GIS 题目分析与操作指导</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>GIS 题目分析与操作指导</h1>
+        <p data-i18n="app.subtitle"></p>
+      </div>
+      <div class="top-actions">
+        <a class="top-link" href="/training-reflection" target="_blank" rel="noopener" data-i18n="button.reflection"></a>
+        <button id="helpBtn" data-i18n="button.help"></button>
+        <button id="doctorBtn" data-i18n="button.doctor"></button>
+      </div>
+    </header>
+
+    <main class="workbench">
+      <aside class="panel project-panel">
+        <h2 data-i18n="panel.project"></h2>
+        <h3 data-i18n="section.recent"></h3>
+        <div id="recentProjects" class="recent-list"></div>
+
+        <h3 data-i18n="section.folder"></h3>
+        <div id="dropZone" class="drop-zone">
+          <strong data-i18n="drop.title"></strong>
+          <span data-i18n="drop.body"></span>
+        </div>
+        <label>
+          <span data-i18n="label.folderPath"></span>
+          <input id="folderPath" data-i18n-placeholder="placeholder.folderPath" />
+        </label>
+        <div class="row">
+          <button id="scanFolderBtn" class="primary" data-i18n="button.scan"></button>
+          <button id="clearDataBtn" data-i18n="button.clear"></button>
+        </div>
+
+        <h3 data-i18n="section.task"></h3>
+        <label>
+          <span data-i18n="label.taskText"></span>
+          <textarea id="taskText" rows="7" data-i18n-placeholder="placeholder.taskText"></textarea>
+        </label>
+        <button id="toggleAiConfigBtn" data-i18n="button.aiConfig"></button>
+        <button id="rebuildTrainingBtn" data-i18n="button.rebuildTraining"></button>
+        <div id="aiConfigPanel" class="config-panel hidden">
+          <div class="row">
+            <label>
+              <span>AI</span>
+              <select id="aiProvider">
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="local">Local rules</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="label.modelPreset"></span>
+              <select id="modelPreset">
+                <option value="deepseek-v4-pro">DeepSeek V4 Pro / Max</option>
+                <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                <option value="gpt-4.1-mini">OpenAI gpt-4.1-mini</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            <span data-i18n="label.customModel"></span>
+            <input id="aiModel" value="deepseek-v4-pro" />
+          </label>
+          <div id="aiKeyStatus" class="summary warning"></div>
+        </div>
+        <button id="analyzeBtn" data-i18n="button.analyze"></button>
+
+        <label>
+          <span data-i18n="label.mainData"></span>
+          <input id="dataPath" data-i18n-placeholder="placeholder.mainData" />
+        </label>
+        <div class="row">
+          <button id="inspectBtn" data-i18n="button.inspect"></button>
+          <button id="useSuggestedBtn" data-i18n="button.useSuggested"></button>
+        </div>
+        <label>
+          <span data-i18n="label.workflowName"></span>
+          <input id="workflowName" value="web_workflow.json" />
+        </label>
+        <button id="planBtn" class="primary" data-i18n="button.plan"></button>
+      </aside>
+
+      <section class="panel data-tree-panel">
+        <h2 data-i18n="panel.scan"></h2>
+        <div id="scanSummary" class="summary warning" data-i18n="summary.scanIdle"></div>
+        <div id="scanList" class="scan-list"></div>
+      </section>
+
+      <section class="panel workflow-panel">
+        <h2 data-i18n="panel.workflow"></h2>
+        <div class="workflow-split">
+          <section class="subpanel ai-result-panel">
+            <h3 data-i18n="section.aiResult"></h3>
+            <div id="analysisBox" class="analysis-box">
+              <div class="summary warning" data-i18n="summary.analysisIdle"></div>
+            </div>
+          </section>
+          <section class="subpanel workflow-result-panel">
+            <h3 data-i18n="section.assistWorkflow"></h3>
+            <div id="workflowSummary" class="summary warning" data-i18n="summary.workflowIdle"></div>
+            <div class="stat-check-block">
+              <button id="statCheckBtn" data-i18n="button.statCheck"></button>
+              <div id="statCheckBox" class="stat-check-box"></div>
+            </div>
+            <div class="module-block">
+              <h3 data-i18n="section.modules"></h3>
+              <div id="operationModules" class="operation-modules">
+                <div class="summary warning" data-i18n="summary.modulesIdle"></div>
+              </div>
+            </div>
+            <div id="processStatus" class="process-status"></div>
+            <div id="flowList" class="flow-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <aside class="panel execute-panel">
+        <h2 data-i18n="panel.execute"></h2>
+        <div class="mapping-block">
+          <h3 data-i18n="section.mapping"></h3>
+          <p class="hint" data-i18n="summary.mappingHint"></p>
+          <button id="repairBtn" data-i18n="button.repair"></button>
+          <div id="repairFeedback" class="repair-feedback hidden"></div>
+          <div id="variableMappings" class="variable-mappings"></div>
+          <div id="layerFieldMappings" class="layer-field-mappings"></div>
+        </div>
+        <label>
+          <span data-i18n="label.resultRoot"></span>
+          <input id="resultRoot" value="D:\桌面\AutoGIS结果" />
+        </label>
+        <label>
+          <span data-i18n="label.runName"></span>
+          <input id="runName" value="web_run" />
+        </label>
+        <label>
+          <span data-i18n="label.outputDir"></span>
+          <input id="outputDir" value="D:\桌面\AutoGIS结果\web_run" />
+        </label>
+        <div class="row">
+          <button id="dryRunBtn" data-i18n="button.preview"></button>
+          <button id="runBtn" class="danger" data-i18n="button.run"></button>
+        </div>
+        <p class="hint" data-i18n="summary.executeGuard"></p>
+      </aside>
+
+      <section class="panel log-panel">
+        <h2 data-i18n="panel.log"></h2>
+        <div id="statusLine" class="status-line" data-i18n="status.idle"></div>
+        <div id="runHistory" class="run-history"></div>
+        <pre id="logBox"></pre>
+      </section>
+
+      <section id="helpPanel" class="panel help-panel hidden">
+        <div class="help-header">
+          <h2 data-i18n="help.title"></h2>
+          <button id="closeHelpBtn" data-i18n="button.close"></button>
+        </div>
+        <div class="help-doc">
+          <h3 data-i18n="help.encoding.title"></h3>
+          <p data-i18n="help.encoding.body"></p>
+          <h3 data-i18n="help.software.title"></h3>
+          <p data-i18n="help.software.body"></p>
+          <h3 data-i18n="help.next.title"></h3>
+          <p data-i18n="help.next.body"></p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

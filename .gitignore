@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.Python
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Local runtime state
+.autogis/
+project_outputs/
+workflows/*.json
+!workflows/.gitkeep
+
+# Secrets and local config
+.env
+*.key
+*apikey*
+*api_key*
+
+# Generated outputs and heavy GIS data
+outputs/*
+!outputs/README.md
+data/*
+!data/README.md
+*.db
+*.duckdb
+*.sqlite
+*.xlsx
+*.xls
+*.csv
+*.tif
+*.tiff
+*.img
+*.jp2
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.adf
+*.nit
+*.ovr
+*.aux.xml
+
+# Screenshots and temporary UI artifacts
+ui-*.png
+*.log
