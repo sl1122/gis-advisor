@@ -151,7 +151,7 @@ def _analysis_allowed_module_ids(analysis: dict[str, Any] | None) -> set[str]:
         "zonal_statistics": ["分区统计", "zonal", "乡镇", "均值"],
         "field_calculator": ["属性表", "字段", "连接", "join"],
         "raster_calculator_reclass": ["重分类", "栅格计算", "nodata", "变化编码"],
-        "remote_sensing_otb": ["遥感", "remote", "ndvi", "分类", "夜间灯光"],
+        "remote_sensing_otb": ["遥感", "remote sensing", "landsat", "sentinel", "modis", "ndvi", "ndwi", "波段", "监督分类", "精度评价", "变化检测"],
         "suitability_mce": ["选址", "适宜", "约束", "权重"],
         "network_qneat3": ["网络分析", "最短路径", "服务区", "od 矩阵", "od矩阵", "最近设施"],
         "vector_edit_geometry": ["创建要素", "移动", "旋转", "切割", "分割", "裁剪", "几何"],

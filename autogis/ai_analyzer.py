@@ -193,6 +193,8 @@ def analyze_task(task: str, scan: dict[str, Any] | None = None) -> TaskAnalysis:
             continue
         if rule["type"] == "building_sunlight" and not _has_building_sunlight_context(task):
             continue
+        if rule["type"] == "remote_sensing" and not _has_remote_sensing_context(task):
+            continue
         matched_types.append(rule["type"])
         required_data.extend(rule["required"])
         risks.extend(rule["risks"])
@@ -242,6 +244,36 @@ def _has_building_sunlight_context(task: str) -> bool:
     building_context = any(kw in lowered for kw in ["建筑", "楼", "高度", "building", "height"])
     shadow_context = lowered.replace("山体阴影", "").replace("hillshade", "")
     return explicit_sunlight or (building_context and any(kw in shadow_context for kw in ["阴影", "shadow", "太阳", "sun"]))
+
+
+def _has_remote_sensing_context(task: str) -> bool:
+    lowered = task.lower()
+    strong_words = [
+        "remote sensing",
+        "landsat",
+        "sentinel",
+        "modis",
+        "ndvi",
+        "ndwi",
+        "band",
+        "multispectral",
+        "hyperspectral",
+        "supervised classification",
+        "unsupervised classification",
+        "accuracy assessment",
+        "training sample",
+        "change detection",
+        "遥感",
+        "波段",
+        "多光谱",
+        "高光谱",
+        "监督分类",
+        "非监督分类",
+        "精度评价",
+        "训练样本",
+        "变化检测",
+    ]
+    return any(word.lower() in lowered for word in strong_words)
 
 
 def analyze_task_with_llm(

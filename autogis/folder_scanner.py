@@ -17,14 +17,14 @@ TABLE_EXTENSIONS = {".csv", ".xls", ".xlsx", ".dbf"}
 QUESTION_HINTS = ["question", "task", "readme", "requirement", "note", "problem", "ti", "timu"]
 DEM_HINTS = ["dem", "dsm", "dtm", "elevation", "gaocheng", "height"]
 BOUNDARY_HINTS = ["boundary", "mask", "clip", "region", "area", "study", "extent"]
-RS_HINTS = ["landsat", "sentinel", "modis", "image", "remote", "band", "ndvi", "ndwi", "light"]
+RS_HINTS = ["landsat", "sentinel", "modis", "remote", "band", "ndvi", "ndwi"]
 HYDRO_HINTS = ["river", "stream", "water", "basin", "watershed", "flow"]
 ANSWER_HINTS = ["answer", "result", "template", "submit"]
 
 QUESTION_CJK_HINTS = ["\u9898", "\u8bd5\u9898", "\u4efb\u52a1", "\u8981\u6c42", "\u8bf4\u660e", "\u9898\u76ee"]
 DEM_CJK_HINTS = ["\u9ad8\u7a0b", "\u6570\u5b57\u9ad8\u7a0b", "\u5761\u5ea6", "\u5761\u5411"]
 BOUNDARY_CJK_HINTS = ["\u8fb9\u754c", "\u8303\u56f4", "\u7814\u7a76\u533a", "\u4e61\u9547\u754c"]
-RS_CJK_HINTS = ["\u5f71\u50cf", "\u9065\u611f", "\u6ce2\u6bb5", "\u706f\u5149", "\u591c\u5149"]
+RS_CJK_HINTS = ["\u9065\u611f", "\u6ce2\u6bb5"]
 HYDRO_CJK_HINTS = ["\u6cb3", "\u6c34\u7cfb", "\u6d41\u57df"]
 ANSWER_CJK_HINTS = ["\u7b54\u5377", "\u7b54\u6848", "\u63d0\u4ea4"]
 

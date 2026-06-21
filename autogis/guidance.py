@@ -88,6 +88,28 @@ def _contains_any(text: str, words: list[str]) -> bool:
     return any(word.lower() in lowered for word in words)
 
 
+def _has_remote_sensing_context(text: str) -> bool:
+    lowered = text.lower()
+    strong_words = [
+        "遥感",
+        "remote sensing",
+        "landsat",
+        "sentinel",
+        "modis",
+        "ndvi",
+        "ndwi",
+        "波段",
+        "多光谱",
+        "高光谱",
+        "监督分类",
+        "非监督分类",
+        "精度评价",
+        "训练样本",
+        "变化检测",
+    ]
+    return any(word.lower() in lowered for word in strong_words)
+
+
 def _first_keyword_index(text: str, words: list[str]) -> int:
     lowered = text.lower()
     indexes = [lowered.find(word.lower()) for word in words if word.lower() in lowered]
@@ -442,10 +464,10 @@ def build_guidance(task: str, scan: dict[str, Any] | None = None) -> GuidanceRep
         order = _first_keyword_index(task, sunlight_words)
         categories.append((order, "建筑日照/阴影分析"))
         steps.extend(_tag_steps(_sunlight_steps(), order, _excerpt_at(task, order)))
-    remote_words = ["遥感", "影像", "波段", "NDVI", "分类", "变化检测", "Landsat", "Sentinel"]
-    if _contains_any(task, remote_words):
+    remote_words = ["遥感", "remote sensing", "波段", "NDVI", "NDWI", "监督分类", "非监督分类", "精度评价", "变化检测", "Landsat", "Sentinel", "MODIS"]
+    if _has_remote_sensing_context(task):
         categories.append((_first_keyword_index(task, remote_words), "遥感处理"))
-        evidence.append("题目包含遥感影像、波段、指数、分类或变化检测。")
+        evidence.append("题目包含遥感、波段、遥感指数、监督分类、精度评价或变化检测等明确遥感语境。")
         order = _first_keyword_index(task, remote_words)
         steps.extend(_tag_steps(_remote_steps(), order, _excerpt_at(task, order)))
 
