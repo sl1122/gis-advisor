@@ -620,7 +620,7 @@ function renderOperationModules(modules = []) {
     box.innerHTML = `<div class="summary warning">${t("summary.modulesIdle")}</div>`;
     return;
   }
-  const sortedModules = [...modules].sort((a, b) => statusPriority(a.status) - statusPriority(b.status));
+  const sortedModules = [...modules].sort((a, b) => (a.task_order ?? 999999) - (b.task_order ?? 999999));
   for (const module of sortedModules) {
     const card = document.createElement("div");
     card.className = `module-card ${module.status}`;
@@ -634,6 +634,7 @@ function renderOperationModules(modules = []) {
         <strong>${module.title}</strong>
         <span class="tag">${moduleStatusLabel(module.status)}</span>
       </div>
+      ${module.task_excerpt ? `<div class="reason">对应题面：${module.task_excerpt}</div>` : ""}
       <div class="hint">类别：${module.category || module.data_group || ""}${backend ? ` | 后端：${backend}` : ""}</div>
       ${inputs ? `<div class="hint">已识别输入</div><ul class="module-list">${inputs}</ul>` : ""}
       ${steps ? `<div class="hint">处理链</div><ul class="module-list">${steps}</ul>` : ""}
@@ -745,6 +746,7 @@ function renderAnalysis(analysis) {
               <span class="tag">${step.route?.automation || "指导"}</span>
             </div>
             <p>${step.purpose || ""}</p>
+            ${step.task_excerpt ? `<div class="reason">对应题面：${step.task_excerpt}</div>` : ""}
             <div class="reason">${step.reason || ""}</div>
             <div class="software-route"><strong>ArcGIS Pro：</strong>${step.route?.arcgis_pro || "待补充"}</div>
             <div class="software-route"><strong>QGIS 替代：</strong>${step.route?.qgis || "待补充"}</div>
@@ -908,7 +910,7 @@ function renderWorkflow(workflow) {
   $("workflowSummary").textContent = `任务类型：${(workflow.task_types || []).map(taskTypeLabel).join("、")}。${missing}`;
   renderProcessStatus();
   $("flowList").innerHTML = "";
-  const sortedSteps = [...(workflow.steps || [])].sort((a, b) => statusPriority(classifyStep(a)) - statusPriority(classifyStep(b)));
+  const sortedSteps = [...(workflow.steps || [])];
   for (const step of sortedSteps) {
     const status = classifyStep(step);
     const outputs = step.outputs ? Object.values(step.outputs).join(", ") : "";

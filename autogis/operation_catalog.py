@@ -26,6 +26,8 @@ class OperationModule:
     checks: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
     sources: list[dict[str, str]] = field(default_factory=list)
+    task_order: int = 999999
+    task_excerpt: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -41,6 +43,8 @@ class OperationModule:
             "checks": self.checks,
             "blockers": self.blockers,
             "sources": self.sources,
+            "task_order": self.task_order,
+            "task_excerpt": self.task_excerpt,
         }
 
 
@@ -66,6 +70,18 @@ def _role_items(scan: dict[str, Any], roles: list[str]) -> list[dict[str, Any]]:
 def _keyword_score(task: str, keywords: list[str]) -> int:
     lowered = task.lower()
     return sum(1 for keyword in keywords if keyword.lower() in lowered)
+
+
+def _first_keyword_index(task: str, keywords: list[str]) -> int:
+    lowered = task.lower()
+    indexes = [lowered.find(keyword.lower()) for keyword in keywords if keyword.lower() in lowered]
+    return min(indexes) if indexes else 999999
+
+
+def _excerpt_at(text: str, index: int, radius: int = 80) -> str:
+    if index >= 999999:
+        return ""
+    return text[max(0, index - radius) : min(len(text), index + radius)].strip()
 
 
 def _backend_available(backends: list[str]) -> bool:
@@ -164,6 +180,8 @@ def build_operation_modules(task: str, scan: dict[str, Any], analysis: dict[str,
         required = raw.get("input_roles") or []
         optional = raw.get("optional_roles") or []
         score = _keyword_score(task, keywords)
+        task_order = _first_keyword_index(task, keywords)
+        task_excerpt = _excerpt_at(task, task_order)
         inputs = _names(_role_items(scan, required + optional)[:8])
         has_inputs = bool(inputs)
         analysis_hit = raw.get("id") in allowed_by_analysis
@@ -174,7 +192,7 @@ def build_operation_modules(task: str, scan: dict[str, Any], analysis: dict[str,
         priority = score * 10 + (20 if analysis_hit else 0) + len(inputs)
         modules.append(
             (
-                priority,
+                (task_order, -priority),
                 OperationModule(
                     id=raw["id"],
                     title=raw["title"],
@@ -188,9 +206,11 @@ def build_operation_modules(task: str, scan: dict[str, Any], analysis: dict[str,
                     checks=raw.get("checks") or [],
                     blockers=blockers,
                     sources=sources,
+                    task_order=task_order,
+                    task_excerpt=task_excerpt,
                 ),
             )
         )
 
-    modules.sort(key=lambda item: item[0], reverse=True)
+    modules.sort(key=lambda item: item[0])
     return [item for _, item in modules]

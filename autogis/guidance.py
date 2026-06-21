@@ -37,6 +37,8 @@ class GuidanceStep:
     route: SoftwareRoute
     risk: str = ""
     user_action: str = ""
+    task_order: int = 999999
+    task_excerpt: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -46,6 +48,8 @@ class GuidanceStep:
             "route": self.route.to_dict(),
             "risk": self.risk,
             "user_action": self.user_action,
+            "task_order": self.task_order,
+            "task_excerpt": self.task_excerpt,
         }
 
 
@@ -82,6 +86,29 @@ class GuidanceReport:
 def _contains_any(text: str, words: list[str]) -> bool:
     lowered = text.lower()
     return any(word.lower() in lowered for word in words)
+
+
+def _first_keyword_index(text: str, words: list[str]) -> int:
+    lowered = text.lower()
+    indexes = [lowered.find(word.lower()) for word in words if word.lower() in lowered]
+    return min(indexes) if indexes else 999999
+
+
+def _excerpt_at(text: str, index: int, radius: int = 70) -> str:
+    if index >= 999999:
+        return ""
+    start = max(0, index - radius)
+    end = min(len(text), index + radius)
+    return text[start:end].strip()
+
+
+def _tag_steps(steps: list[GuidanceStep], order: int, excerpt: str) -> list[GuidanceStep]:
+    for step in steps:
+        if step.task_order >= 999999:
+            step.task_order = order
+        if excerpt and not step.task_excerpt:
+            step.task_excerpt = excerpt
+    return steps
 
 
 def _tokens(text: str) -> set[str]:
@@ -363,7 +390,7 @@ def build_guidance(task: str, scan: dict[str, Any] | None = None) -> GuidanceRep
     scan = scan or {}
     evidence: list[str] = []
     steps: list[GuidanceStep] = []
-    categories: list[str] = []
+    categories: list[tuple[int, str]] = []
     missing: list[str] = []
 
     if _contains_any(task, ["国赛", "竞赛", "试题", "空", "图", "答卷"]):
@@ -373,71 +400,89 @@ def build_guidance(task: str, scan: dict[str, Any] | None = None) -> GuidanceRep
     else:
         orientation = "通用 GIS 需求导向"
 
-    if _contains_any(task, ["水文", "填洼", "流向", "流量", "汇流", "河网", "watershed", "flow accumulation"]):
-        categories.append("水文分析")
+    hydro_words = ["水文", "填洼", "流向", "流量", "汇流", "河网", "watershed", "flow accumulation"]
+    if _contains_any(task, hydro_words):
+        categories.append((_first_keyword_index(task, hydro_words), "水文分析"))
         evidence.append("题目包含水文、填洼、流向、汇流或河网等关键词。")
-        steps.extend(_hydrology_steps())
-    if _contains_any(task, ["选址", "适宜", "缓冲", "擦除", "相交", "候选区", "suitability", "site"]):
-        categories.append("选址/约束筛选")
+        order = _first_keyword_index(task, hydro_words)
+        steps.extend(_tag_steps(_hydrology_steps(), order, _excerpt_at(task, order)))
+    site_words = ["选址", "适宜", "缓冲", "擦除", "相交", "候选区", "道路", "噪声", "最小距离", "距离筛选", "suitability", "site"]
+    if _contains_any(task, site_words):
+        categories.append((_first_keyword_index(task, site_words), "选址/约束筛选"))
         evidence.append("题目包含选址、适宜性、缓冲、擦除或候选区等关键词。")
-        steps.extend(_site_steps())
-    if _contains_any(task, ["可视域", "视域", "可视", "观察点", "瞭望塔", "viewshed"]):
-        categories.append("可视域分析")
+        order = _first_keyword_index(task, site_words)
+        steps.extend(_tag_steps(_site_steps(), order, _excerpt_at(task, order)))
+    viewshed_words = ["可视域", "视域", "可视", "观察点", "瞭望塔", "viewshed"]
+    if _contains_any(task, viewshed_words):
+        categories.append((_first_keyword_index(task, viewshed_words), "可视域分析"))
         evidence.append("题目包含可视域、观察点或瞭望塔等关键词。")
-        steps.extend(_viewshed_steps())
-    if _contains_any(task, ["分区统计", "区域统计", "乡镇", "GDP", "夜间灯光", "均值", "总和"]):
-        categories.append("分区统计/指标回连")
+        order = _first_keyword_index(task, viewshed_words)
+        steps.extend(_tag_steps(_viewshed_steps(), order, _excerpt_at(task, order)))
+    zonal_words = ["分区统计", "区域统计", "乡镇", "GDP", "夜间灯光", "均值", "总和"]
+    if _contains_any(task, zonal_words):
+        categories.append((_first_keyword_index(task, zonal_words), "分区统计/指标回连"))
         evidence.append("题目包含分区统计、乡镇、GDP、夜间灯光或统计指标。")
-        steps.extend(_zonal_steps())
-    if _contains_any(task, ["空地率", "TCI", "地形复杂度", "LSI", "耕地规模化", "夜间灯光", "权重", "汇流累积量阈值"]):
-        categories.append("公式/指标计算")
+        order = _first_keyword_index(task, zonal_words)
+        steps.extend(_tag_steps(_zonal_steps(), order, _excerpt_at(task, order)))
+    formula_words = ["空地率", "TCI", "地形复杂度", "LSI", "耕地规模化", "夜间灯光", "权重", "汇流累积量阈值"]
+    if _contains_any(task, formula_words):
+        categories.append((_first_keyword_index(task, formula_words), "公式/指标计算"))
         evidence.append("题面包含公式、阈值或指标定义，需要先把公式翻译成字段和 GIS 计算链。")
-        steps.extend(_formula_steps(task))
-    if _contains_any(task, ["坡度", "坡向", "山体阴影", "地形", "DEM", "hillshade", "slope", "aspect"]):
-        categories.append("地形分析")
+        order = _first_keyword_index(task, formula_words)
+        steps.extend(_tag_steps(_formula_steps(task), order, _excerpt_at(task, order)))
+    terrain_words = ["坡度", "坡向", "山体阴影", "地形", "DEM", "hillshade", "slope", "aspect"]
+    if _contains_any(task, terrain_words):
+        categories.append((_first_keyword_index(task, terrain_words), "地形分析"))
         evidence.append("题目包含 DEM、坡度、坡向、地形或山体阴影。")
-        steps.extend(_terrain_steps())
+        order = _first_keyword_index(task, terrain_words)
+        steps.extend(_tag_steps(_terrain_steps(), order, _excerpt_at(task, order)))
     if _is_building_sunlight_question(task):
-        categories.append("建筑日照/阴影分析")
         evidence.append("题目包含建筑日照、太阳角、冬至、背光面或建筑高度语境。")
-        steps.extend(_sunlight_steps())
-    if _contains_any(task, ["遥感", "影像", "波段", "NDVI", "分类", "变化检测", "Landsat", "Sentinel"]):
-        categories.append("遥感处理")
+        sunlight_words = ["日照", "建筑日照", "太阳阴影", "背光", "冬至", "sun shadow", "sunlight", "solar"]
+        order = _first_keyword_index(task, sunlight_words)
+        categories.append((order, "建筑日照/阴影分析"))
+        steps.extend(_tag_steps(_sunlight_steps(), order, _excerpt_at(task, order)))
+    remote_words = ["遥感", "影像", "波段", "NDVI", "分类", "变化检测", "Landsat", "Sentinel"]
+    if _contains_any(task, remote_words):
+        categories.append((_first_keyword_index(task, remote_words), "遥感处理"))
         evidence.append("题目包含遥感影像、波段、指数、分类或变化检测。")
-        steps.extend(_remote_steps())
+        order = _first_keyword_index(task, remote_words)
+        steps.extend(_tag_steps(_remote_steps(), order, _excerpt_at(task, order)))
 
     roles = _scan_roles(scan)
     groups = scan.get("groups") or {}
-    if "水文分析" in categories and not groups.get("dem"):
+    category_names = [name for _, name in categories]
+    if "水文分析" in category_names and not groups.get("dem"):
         missing.append("水文分析需要 DEM，高程数据未在扫描结果中明确识别。")
-    if "建筑日照/阴影分析" in categories:
+    if "建筑日照/阴影分析" in category_names:
         missing.append("需要确认建筑高度字段；若只有楼层数字段，应先换算为高度字段。")
-    if "选址/约束筛选" in categories:
+    if "选址/约束筛选" in category_names:
         missing.append("需要确认哪些图层是约束区，哪些图层是候选区；擦除顺序不能反。")
-    if "可视域分析" in categories:
+    if "可视域分析" in category_names:
         missing.append("需要确认观察点、观察高度、目标高度和分析半径；多点可视域需要批处理。")
     if not categories:
-        categories.append("未明确分类")
+        categories.append((999999, "未明确分类"))
         missing.append("题目关键词不足，建议补充目标、数据类型、成果要求或相似训练案例。")
+    ordered_categories = [name for _, name in sorted(categories, key=lambda item: item[0])]
 
     goal = "拆解题目或项目需求，给出 ArcGIS Pro 优先、QGIS 免费替代的操作路线。"
     result_checks = _base_checks()
-    if "水文分析" in categories:
+    if "水文分析" in ordered_categories:
         result_checks.append("河网提取结果应沿低谷分布，并能解释阈值与集水面积的换算关系。")
-    if "可视域分析" in categories:
+    if "可视域分析" in ordered_categories:
         result_checks.append("可视域结果需确认可见值编码、不可见值编码和 NoData 含义。")
-    if "分区统计/指标回连" in categories:
+    if "分区统计/指标回连" in ordered_categories:
         result_checks.append("分区统计回连后检查 Null 值、异常值和字段类型。")
 
     return GuidanceReport(
         orientation=orientation,
-        task_category=" / ".join(categories),
+        task_category=" / ".join(ordered_categories),
         analysis_mode="题目分析优先；自动执行仅作为确定性步骤的辅助。",
         goal=goal,
         evidence=evidence,
         data_roles=roles,
         missing_or_uncertain=missing,
-        recommended_route=steps,
+        recommended_route=sorted(steps, key=lambda step: step.task_order),
         result_checks=result_checks,
         similar_memory=_case_memory(task),
         execution_policy="默认不承诺一键得出正确结果；仅对参数明确、风险低的步骤提供可选自动执行。",
@@ -458,6 +503,7 @@ def _is_building_sunlight_question(text: str) -> bool:
 def _formula_steps(task: str) -> list[GuidanceStep]:
     steps: list[GuidanceStep] = []
     if _contains_any(task, ["空地率"]):
+        order = _first_keyword_index(task, ["空地率"])
         steps.append(
             GuidanceStep(
                 title="空地率计算",
@@ -470,9 +516,12 @@ def _formula_steps(task: str) -> list[GuidanceStep]:
                     checks=["确认建筑物面已合并或按片区统计；空地率通常为 (片区面积 - 建筑覆盖面积) / 片区面积。"],
                     automation="可半自动：面积统计需确认片区字段",
                 ),
+                task_order=order,
+                task_excerpt=_excerpt_at(task, order),
             )
         )
     if _contains_any(task, ["TCI", "地形复杂度"]):
+        order = _first_keyword_index(task, ["TCI", "地形复杂度"])
         steps.append(
             GuidanceStep(
                 title="TCI 地形复杂度指数",
@@ -485,9 +534,12 @@ def _formula_steps(task: str) -> list[GuidanceStep]:
                     checks=["确认 Ln 使用自然对数；R、S 的单位和 NoData 处理要一致；乡镇 TCI 是像元均值。"],
                     automation="可自动执行：公式和窗口参数明确后",
                 ),
+                task_order=order,
+                task_excerpt=_excerpt_at(task, order),
             )
         )
     if _contains_any(task, ["LSI", "耕地规模化"]):
+        order = _first_keyword_index(task, ["LSI", "耕地规模化"])
         steps.append(
             GuidanceStep(
                 title="LSI 耕地规模化指数",
@@ -500,9 +552,12 @@ def _formula_steps(task: str) -> list[GuidanceStep]:
                     checks=["先剔除小于阈值的斑块再计数；面积单位统一为题目要求的 km² 或 m²。"],
                     automation="可半自动：需确认耕地编码和面积阈值",
                 ),
+                task_order=order,
+                task_excerpt=_excerpt_at(task, order),
             )
         )
     if _contains_any(task, ["夜间灯光", "GDP", "权重"]):
+        order = _first_keyword_index(task, ["夜间灯光", "GDP", "权重"])
         steps.append(
             GuidanceStep(
                 title="夜间灯光加权 GDP 分配",
@@ -515,9 +570,12 @@ def _formula_steps(task: str) -> list[GuidanceStep]:
                     checks=["每个区县内乡镇权重之和应约等于 1；灯光 NoData 和 0 值要区分。"],
                     automation="可半自动：字段映射确认后",
                 ),
+                task_order=order,
+                task_excerpt=_excerpt_at(task, order),
             )
         )
     if _contains_any(task, ["汇流累积量阈值", "阈值>500", "阈值 > 500"]):
+        order = _first_keyword_index(task, ["汇流累积量阈值", "阈值>500", "阈值 > 500"])
         steps.append(
             GuidanceStep(
                 title="汇流阈值与集水面积换算",
@@ -530,6 +588,8 @@ def _formula_steps(task: str) -> list[GuidanceStep]:
                     checks=["集水面积 = 阈值 × 像元宽度 × 像元高度；若输出 km²，需要除以 1,000,000。"],
                     automation="可自动执行：像元大小明确后",
                 ),
+                task_order=order,
+                task_excerpt=_excerpt_at(task, order),
             )
         )
-    return steps
+    return sorted(steps, key=lambda step: step.task_order)

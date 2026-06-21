@@ -12,6 +12,12 @@ def _contains_any(text: str, words: list[str]) -> bool:
     return any(word.lower() in lowered for word in words)
 
 
+def _first_keyword_index(text: str, words: list[str]) -> int:
+    lowered = text.lower()
+    indexes = [lowered.find(word.lower()) for word in words if word.lower() in lowered]
+    return min(indexes) if indexes else 999999
+
+
 def _is_building_sunlight_task(text: str) -> bool:
     lowered = text.lower()
     explicit_terms = ["sunlight", "sun shadow", "solar", "solar radiation", "building sunlight", "日照", "建筑日照", "太阳阴影", "背光面", "冬至"]
@@ -342,10 +348,12 @@ def _analysis_text(analysis: dict[str, Any] | None) -> str:
 
 def _formula_indicator_steps(task: str, analysis: dict[str, Any] | None = None) -> list[WorkflowStep]:
     combined = f"{task}\n{_analysis_text(analysis)}"
-    steps: list[WorkflowStep] = []
+    steps: list[tuple[int, WorkflowStep]] = []
     if _contains_any(combined, ["空地率"]):
         steps.append(
-            WorkflowStep(
+            (
+                _first_keyword_index(combined, ["空地率"]),
+                WorkflowStep(
                 id="80_open_space_ratio",
                 title="空地率计算",
                 purpose="按公式计算未被建筑覆盖面积占片区总面积的比例。",
@@ -357,11 +365,14 @@ def _formula_indicator_steps(task: str, analysis: dict[str, Any] | None = None) 
                     "公式一般为 (片区面积 - 建筑覆盖面积) / 片区面积。",
                     "建筑覆盖面积应按片区汇总，叠置后必须重新计算面积字段。",
                 ],
+                ),
             )
         )
     if _contains_any(combined, ["TCI", "地形复杂度", "Ln(R", "ln(r"]):
         steps.append(
-            WorkflowStep(
+            (
+                _first_keyword_index(combined, ["TCI", "地形复杂度", "Ln(R", "ln(r"]),
+                WorkflowStep(
                 id="81_tci_raster",
                 title="TCI 地形复杂度指数",
                 purpose="根据 R 和 S 生成像元级 TCI 栅格，再按乡镇统计均值。",
@@ -375,11 +386,14 @@ def _formula_indicator_steps(task: str, analysis: dict[str, Any] | None = None) 
                     "Ln 是自然对数；R 和 S 的单位、NoData 处理要一致。",
                     "乡镇 TCI 是像元 TCI 的均值，不是直接对 DEM 求均值。",
                 ],
+                ),
             )
         )
     if _contains_any(combined, ["LSI", "耕地规模化"]):
         steps.append(
-            WorkflowStep(
+            (
+                _first_keyword_index(combined, ["LSI", "耕地规模化"]),
+                WorkflowStep(
                 id="82_lsi_index",
                 title="LSI 耕地规模化指数",
                 purpose="按乡镇统计耕地面积 A 和满足阈值的耕地斑块数量 N，再代入公式。",
@@ -391,11 +405,14 @@ def _formula_indicator_steps(task: str, analysis: dict[str, Any] | None = None) 
                     "先确认耕地编码和面积阈值，例如面积 >= 1000 平方米。",
                     "A 和 N 必须按同一乡镇分组统计，面积单位按题目要求换算。",
                 ],
+                ),
             )
         )
     if _contains_any(combined, ["夜间灯光", "GDP", "权重"]):
         steps.append(
-            WorkflowStep(
+            (
+                _first_keyword_index(combined, ["夜间灯光", "GDP", "权重"]),
+                WorkflowStep(
                 id="83_light_weighted_gdp",
                 title="夜间灯光加权 GDP 分配",
                 purpose="按夜间灯光权重把区县 GDP 分配到乡镇。",
@@ -407,9 +424,10 @@ def _formula_indicator_steps(task: str, analysis: dict[str, Any] | None = None) 
                     "每个区县内乡镇灯光权重之和应约等于 1。",
                     "必须区分灯光 0 值和 NoData；区县代码、乡镇代码要能连接。",
                 ],
+                ),
             )
         )
-    return steps
+    return [step for _, step in sorted(steps, key=lambda item: item[0])]
 
 
 def _zonal_stats_steps() -> list[WorkflowStep]:
@@ -553,7 +571,7 @@ def _vector_edit_steps(task: str) -> list[WorkflowStep]:
 def plan_task(task: str, data_paths: list[Path] | None = None, analysis: dict[str, Any] | None = None) -> Workflow:
     data_paths = data_paths or []
     steps = [_data_check_step()]
-    task_types: list[str] = []
+    task_types: list[tuple[int, str]] = []
     missing_inputs: list[str] = []
     assumptions = ["当前为辅助流程草案。执行前必须确认数据和关键参数。"]
 
@@ -567,61 +585,86 @@ def plan_task(task: str, data_paths: list[Path] | None = None, analysis: dict[st
             steps=steps,
         )
 
-    if _contains_any(task, ["hydrology", "fill", "flow", "accumulation", "stream", "watershed", "水文", "填洼", "流向", "流量", "河网", "流域", "汇流"]):
-        task_types.append("hydrology")
-        steps.extend(_hydrology_steps())
+    step_groups: list[tuple[int, list[WorkflowStep]]] = []
+
+    hydro_words = ["hydrology", "fill", "flow", "accumulation", "stream", "watershed", "水文", "填洼", "流向", "流量", "河网", "流域", "汇流"]
+    if _contains_any(task, hydro_words):
+        order = _first_keyword_index(task, hydro_words)
+        task_types.append((order, "hydrology"))
+        step_groups.append((order, _hydrology_steps()))
         if not _contains_any(task, ["threshold", "catchment area", "阈值", "集水面积", ">500"]):
             missing_inputs.append("河网提取阈值或目标集水面积")
 
     is_sunlight_task = _is_building_sunlight_task(task)
 
-    if _contains_any(task, ["slope", "aspect", "hillshade", "illumination", "dem", "坡度", "坡向", "光照", "山体阴影", "高程", "地形"]) and not is_sunlight_task:
-        task_types.append("terrain")
-        steps.extend(_terrain_steps())
+    terrain_words = ["slope", "aspect", "hillshade", "illumination", "dem", "坡度", "坡向", "光照", "山体阴影", "高程", "地形"]
+    if _contains_any(task, terrain_words) and not is_sunlight_task:
+        order = _first_keyword_index(task, terrain_words)
+        task_types.append((order, "terrain"))
+        step_groups.append((order, _terrain_steps()))
 
     if is_sunlight_task:
-        task_types.append("building_sunlight")
-        steps.extend(_sunlight_analysis_steps())
+        sunlight_words = ["sunlight", "sun shadow", "solar", "solar radiation", "building sunlight", "日照", "建筑日照", "太阳阴影", "背光面", "冬至"]
+        order = _first_keyword_index(task, sunlight_words)
+        task_types.append((order, "building_sunlight"))
+        step_groups.append((order, _sunlight_analysis_steps()))
 
-    if _contains_any(task, ["site", "buffer", "erase", "intersect", "select by location", "service area", "选址", "缓冲", "擦除", "相交", "按位置"]) or _is_road_distance_overlay_task(task):
-        task_types.append("site_selection")
-        steps.extend(_site_selection_steps())
+    site_words = ["site", "buffer", "erase", "intersect", "select by location", "service area", "选址", "缓冲", "擦除", "相交", "按位置", "道路", "噪声", "最小距离"]
+    if _contains_any(task, site_words) or _is_road_distance_overlay_task(task):
+        order = _first_keyword_index(task, site_words)
+        task_types.append((order, "site_selection"))
+        step_groups.append((order, _site_selection_steps()))
 
-    if _contains_any(task, ["viewshed", "visibility", "visible area", "可视域", "视域", "可视", "观察点", "瞭望塔"]):
-        task_types.append("viewshed")
-        steps.extend(_viewshed_steps())
+    viewshed_words = ["viewshed", "visibility", "visible area", "可视域", "视域", "可视", "观察点", "瞭望塔"]
+    if _contains_any(task, viewshed_words):
+        order = _first_keyword_index(task, viewshed_words)
+        task_types.append((order, "viewshed"))
+        step_groups.append((order, _viewshed_steps()))
 
-    if _contains_any(task, ["reclass", "change", "transition", "land use", "重分类", "变化", "转移", "转移矩阵", "土地利用", "耕地"]):
-        task_types.append("reclass_change")
-        steps.extend(_reclass_change_steps())
+    reclass_words = ["reclass", "change", "transition", "land use", "重分类", "变化", "转移", "转移矩阵", "土地利用", "耕地"]
+    if _contains_any(task, reclass_words):
+        order = _first_keyword_index(task, reclass_words)
+        task_types.append((order, "reclass_change"))
+        step_groups.append((order, _reclass_change_steps()))
 
-    if _contains_any(task, ["zonal", "zone statistics", "分区统计", "区域统计", "乡镇", "统计", "均值", "总和"]):
-        task_types.append("zonal_statistics")
-        steps.extend(_zonal_stats_steps())
+    zonal_words = ["zonal", "zone statistics", "分区统计", "区域统计", "乡镇", "统计", "均值", "总和"]
+    if _contains_any(task, zonal_words):
+        order = _first_keyword_index(task, zonal_words)
+        task_types.append((order, "zonal_statistics"))
+        step_groups.append((order, _zonal_stats_steps()))
 
     formula_steps = _formula_indicator_steps(task, analysis=analysis)
     if formula_steps:
-        task_types.append("formula_indicators")
-        steps.extend(formula_steps)
+        formula_words = ["空地率", "TCI", "地形复杂度", "LSI", "耕地规模化", "夜间灯光", "GDP", "权重", "汇流累积量阈值"]
+        order = _first_keyword_index(task, formula_words)
+        task_types.append((order, "formula_indicators"))
+        step_groups.append((order, formula_steps))
 
-    if _contains_any(task, ["join", "table", "csv", "xlsx", "dbf", "attribute", "field", "连接", "属性表", "字段", "表格", "挂接", "追加"]):
-        task_types.append("attribute_join")
-        steps.extend(_attribute_table_steps())
+    join_words = ["join", "table", "csv", "xlsx", "dbf", "attribute", "field", "连接", "属性表", "字段", "表格", "挂接", "追加"]
+    if _contains_any(task, join_words):
+        order = _first_keyword_index(task, join_words)
+        task_types.append((order, "attribute_join"))
+        step_groups.append((order, _attribute_table_steps()))
 
-    if _contains_any(task, ["create feature", "digitize", "move", "translate", "rotate", "split", "cut", "divide", "clip", "subdivide", "新增要素", "创建要素", "点要素", "线要素", "面要素", "绘制", "数字化", "新建", "移动", "平移", "旋转", "切割", "分割", "划分", "裁剪", "分块", "鱼网"]):
-        task_types.append("vector_edit_geometry")
-        steps.extend(_vector_edit_steps(task))
+    edit_words = ["create feature", "digitize", "move", "translate", "rotate", "split", "cut", "divide", "clip", "subdivide", "新增要素", "创建要素", "点要素", "线要素", "面要素", "绘制", "数字化", "新建", "移动", "平移", "旋转", "切割", "分割", "划分", "裁剪", "分块", "鱼网"]
+    if _contains_any(task, edit_words):
+        order = _first_keyword_index(task, edit_words)
+        task_types.append((order, "vector_edit_geometry"))
+        step_groups.append((order, _vector_edit_steps(task)))
 
     if not task_types:
-        task_types.append("unknown")
+        task_types.append((999999, "unknown"))
         missing_inputs.append("暂时无法分类题目。请补充更明确的操作关键词，或手动选择数据角色。")
 
     if not data_paths:
         missing_inputs.append("未提供真实输入数据路径。")
 
+    for _, group_steps in sorted(step_groups, key=lambda item: item[0]):
+        steps.extend(group_steps)
+
     return Workflow(
         task=task,
-        task_types=task_types,
+        task_types=[name for _, name in sorted(task_types, key=lambda item: item[0])],
         assumptions=assumptions,
         missing_inputs=missing_inputs,
         data_paths=data_paths,
