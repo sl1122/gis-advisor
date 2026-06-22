@@ -37,6 +37,14 @@ def _is_road_distance_overlay_task(text: str) -> bool:
     return has_road and has_distance_filter and has_target
 
 
+def _is_site_selection_context(text: str) -> bool:
+    lowered = text.lower()
+    direct = ["site", "suitability", "buffer", "erase", "intersect", "select by location", "service area", "选址", "适宜", "缓冲", "擦除", "相交", "按位置", "候选区"]
+    if any(word.lower() in lowered for word in direct):
+        return True
+    return _is_road_distance_overlay_task(text)
+
+
 def _data_check_step() -> WorkflowStep:
     return WorkflowStep(
         id="00_data_check",
@@ -609,8 +617,8 @@ def plan_task(task: str, data_paths: list[Path] | None = None, analysis: dict[st
         task_types.append((order, "building_sunlight"))
         step_groups.append((order, _sunlight_analysis_steps()))
 
-    site_words = ["site", "buffer", "erase", "intersect", "select by location", "service area", "选址", "缓冲", "擦除", "相交", "按位置", "道路", "噪声", "最小距离"]
-    if _contains_any(task, site_words) or _is_road_distance_overlay_task(task):
+    site_words = ["site", "suitability", "buffer", "erase", "intersect", "select by location", "service area", "选址", "适宜", "缓冲", "擦除", "相交", "按位置", "候选区", "噪声", "最小距离", "距离筛选"]
+    if _is_site_selection_context(task):
         order = _first_keyword_index(task, site_words)
         task_types.append((order, "site_selection"))
         step_groups.append((order, _site_selection_steps()))

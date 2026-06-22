@@ -195,13 +195,14 @@ def analyze_task(task: str, scan: dict[str, Any] | None = None) -> TaskAnalysis:
             continue
         if rule["type"] == "remote_sensing" and not _has_remote_sensing_context(task):
             continue
+        rule_operations = _filtered_rule_operations(rule, task)
         matched_types.append(rule["type"])
         required_data.extend(rule["required"])
         risks.extend(rule["risks"])
         confidence = min(0.95, 0.45 + 0.08 * len(hits))
         operations.extend(
             OperationHint(name=op, reason=f"Matched {rule['type']} keywords: {', '.join(hits[:5])}", confidence=confidence)
-            for op in rule["operations"]
+            for op in rule_operations
         )
 
     groups = scan.get("groups") or {}
@@ -244,6 +245,22 @@ def _has_building_sunlight_context(task: str) -> bool:
     building_context = any(kw in lowered for kw in ["建筑", "楼", "高度", "building", "height"])
     shadow_context = lowered.replace("山体阴影", "").replace("hillshade", "")
     return explicit_sunlight or (building_context and any(kw in shadow_context for kw in ["阴影", "shadow", "太阳", "sun"]))
+
+
+def _filtered_rule_operations(rule: dict[str, Any], task: str) -> list[str]:
+    if rule.get("type") != "vector_edit_geometry":
+        return rule.get("operations") or []
+    lowered = task.lower()
+    groups = [
+        (["create feature", "digitize", "new feature", "新增要素", "创建要素", "绘制", "数字化", "新建"], "创建要素"),
+        (["move", "translate", "移动", "平移", "偏移"], "平移几何"),
+        (["rotate", "旋转", "转动"], "旋转要素"),
+        (["split", "cut", "切割", "分割", "切分"], "按线分割"),
+        (["clip", "裁剪", "按范围", "掩膜"], "裁剪"),
+        (["subdivide", "partition", "网格", "鱼网", "分块"], "细分"),
+    ]
+    operations = [name for words, name in groups if any(word.lower() in lowered for word in words)]
+    return operations or rule.get("operations") or []
 
 
 def _has_remote_sensing_context(task: str) -> bool:

@@ -81,7 +81,104 @@ def _first_keyword_index(task: str, keywords: list[str]) -> int:
 def _excerpt_at(text: str, index: int, radius: int = 80) -> str:
     if index >= 999999:
         return ""
-    return text[max(0, index - radius) : min(len(text), index + radius)].strip()
+    normalized = " ".join(text.replace("\r", "\n").split())
+    if not normalized:
+        return ""
+    keyword_pos = min(index, len(normalized) - 1)
+    start_candidates = [normalized.rfind(mark, 0, keyword_pos) for mark in ["。", "；", ";", "\n"]]
+    end_candidates = [normalized.find(mark, keyword_pos) for mark in ["。", "；", ";", "\n"]]
+    start = max(start_candidates)
+    start = 0 if start < 0 else start + 1
+    valid_ends = [item for item in end_candidates if item >= 0]
+    end = min(valid_ends) + 1 if valid_ends else min(len(normalized), keyword_pos + radius)
+    snippet = normalized[start:end].strip()
+    if len(snippet) > radius:
+        local_start = max(0, keyword_pos - start - radius // 2)
+        snippet = snippet[local_start : local_start + radius].strip()
+        if local_start > 0:
+            snippet = f"...{snippet}"
+        if start + local_start + radius < end:
+            snippet = f"{snippet}..."
+    return snippet
+
+
+def _matched_any(task: str, words: list[str]) -> bool:
+    lowered = task.lower()
+    return any(word.lower() in lowered for word in words)
+
+
+def _customize_vector_edit_module(raw: dict[str, Any], task: str) -> dict[str, Any]:
+    operations = [
+        {
+            "name": "创建/数字化要素",
+            "words": ["create feature", "digitize", "new feature", "新增要素", "创建要素", "绘制", "数字化", "新建"],
+            "steps": ["确认目标图层、几何类型和必填字段", "按题目给定坐标或构造规则创建要素", "检查几何位置、捕捉和属性完整性"],
+            "outputs": ["created_features.gpkg"],
+            "blockers": ["创建要素需要明确坐标、草图或构造规则；否则只能给操作指导。"],
+        },
+        {
+            "name": "移动/平移要素",
+            "words": ["move", "translate", "移动", "平移", "偏移"],
+            "steps": ["确认目标图层和要移动的要素", "填写 X/Y 偏移量并执行移动/平移", "检查移动后位置、坐标单位和属性继承"],
+            "outputs": ["translated_features.gpkg"],
+            "blockers": ["移动前必须确认 X/Y 偏移量和当前坐标系单位。"],
+        },
+        {
+            "name": "旋转要素",
+            "words": ["rotate", "旋转", "转动"],
+            "steps": ["确认目标图层、旋转角度和旋转中心", "执行旋转要素", "检查角度方向和位置偏差"],
+            "outputs": ["rotated_features.gpkg"],
+            "blockers": ["旋转必须确认角度方向和旋转中心。"],
+        },
+        {
+            "name": "按线切割要素",
+            "words": ["split", "cut", "切割", "分割", "切分"],
+            "steps": ["确认目标图层和切割线图层", "执行按线分割", "检查分割结果、面积和属性继承"],
+            "outputs": ["split_features.gpkg"],
+            "blockers": ["切割线必须真正穿过目标要素。"],
+        },
+        {
+            "name": "裁剪矢量图层",
+            "words": ["clip", "裁剪", "按范围", "掩膜"],
+            "steps": ["确认目标图层和裁剪边界", "执行裁剪", "检查裁剪范围、面积和字段保留情况"],
+            "outputs": ["clipped_features.gpkg"],
+            "blockers": ["需要确认题目要求的是裁剪、相交还是擦除。"],
+        },
+        {
+            "name": "细分/分块要素",
+            "words": ["subdivide", "partition", "网格", "鱼网", "分块"],
+            "steps": ["确认是否需要技术性细分或规则网格", "执行细分/分块", "检查节点数、面积和拓扑"],
+            "outputs": ["subdivided_features.gpkg"],
+            "blockers": ["细分参数和分块规则需要确认。"],
+        },
+    ]
+    matched = [item for item in operations if _matched_any(task, item["words"])]
+    if not matched:
+        return raw
+    tailored = dict(raw)
+    names = [item["name"] for item in matched]
+    tailored["title"] = "、".join(names)
+    tailored["steps"] = [step for item in matched for step in item["steps"]]
+    tailored["outputs"] = [output for item in matched for output in item["outputs"]]
+    tailored["blockers"] = [blocker for item in matched for blocker in item["blockers"]]
+    tailored["checks"] = ["只显示题目命中的编辑操作；未命中的创建、旋转、切割、划分等不会作为本题流程。", "编辑类任务执行前必须确认坐标系、捕捉和属性继承。"]
+    return tailored
+
+
+def _customize_module(raw: dict[str, Any], task: str) -> dict[str, Any]:
+    if raw.get("id") == "vector_edit_geometry":
+        return _customize_vector_edit_module(raw, task)
+    return raw
+
+
+def _is_vector_overlay_context(task: str) -> bool:
+    lowered = task.lower()
+    direct = ["缓冲", "擦除", "相交", "叠置", "约束", "候选区", "适宜", "最小距离", "距离筛选", "buffer", "erase", "intersect", "overlay"]
+    if any(word.lower() in lowered for word in direct):
+        return True
+    has_road = any(word in lowered for word in ["道路", "路网", "road"])
+    has_constraint = any(word in lowered for word in ["噪声", "影响距离", "不适宜", "建设适宜", "退让"])
+    return has_road and has_constraint
 
 
 def _backend_available(backends: list[str]) -> bool:
@@ -175,11 +272,14 @@ def build_operation_modules(task: str, scan: dict[str, Any], analysis: dict[str,
     modules: list[tuple[int, OperationModule]] = []
     allowed_by_analysis = _analysis_allowed_module_ids(analysis)
 
-    for raw in library.get("modules", []):
+    for source_raw in library.get("modules", []):
+        raw = _customize_module(source_raw, task)
         keywords = raw.get("keywords") or []
         required = raw.get("input_roles") or []
         optional = raw.get("optional_roles") or []
         score = _keyword_score(task, keywords)
+        if raw.get("id") == "vector_overlay_area" and score and not _is_vector_overlay_context(task):
+            score = 0
         task_order = _first_keyword_index(task, keywords)
         task_excerpt = _excerpt_at(task, task_order)
         inputs = _names(_role_items(scan, required + optional)[:8])

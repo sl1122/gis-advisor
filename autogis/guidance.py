@@ -88,6 +88,21 @@ def _contains_any(text: str, words: list[str]) -> bool:
     return any(word.lower() in lowered for word in words)
 
 
+def _is_site_selection_context(text: str) -> bool:
+    lowered = text.lower()
+    direct = ["选址", "适宜", "缓冲", "擦除", "相交", "候选区", "距离筛选", "suitability", "site"]
+    if any(word.lower() in lowered for word in direct):
+        return True
+    has_road = any(word in lowered for word in ["道路", "路网", "road"])
+    has_constraint = any(word in lowered for word in ["噪声", "影响距离", "最小距离", "不适宜", "建设适宜", "退让"])
+    return has_road and has_constraint
+
+
+def _is_vector_edit_context(text: str) -> bool:
+    words = ["create feature", "digitize", "new feature", "新增要素", "创建要素", "绘制", "数字化", "新建", "move", "translate", "移动", "平移", "偏移", "rotate", "旋转", "转动", "split", "cut", "切割", "分割", "切分", "clip", "裁剪", "subdivide", "partition", "网格", "鱼网", "分块"]
+    return _contains_any(text, words)
+
+
 def _has_remote_sensing_context(text: str) -> bool:
     lowered = text.lower()
     strong_words = [
@@ -119,9 +134,25 @@ def _first_keyword_index(text: str, words: list[str]) -> int:
 def _excerpt_at(text: str, index: int, radius: int = 70) -> str:
     if index >= 999999:
         return ""
-    start = max(0, index - radius)
-    end = min(len(text), index + radius)
-    return text[start:end].strip()
+    normalized = " ".join(text.replace("\r", "\n").split())
+    if not normalized:
+        return ""
+    keyword_pos = min(index, len(normalized) - 1)
+    start_candidates = [normalized.rfind(mark, 0, keyword_pos) for mark in ["。", "；", ";", "\n"]]
+    end_candidates = [normalized.find(mark, keyword_pos) for mark in ["。", "；", ";", "\n"]]
+    start = max(start_candidates)
+    start = 0 if start < 0 else start + 1
+    valid_ends = [item for item in end_candidates if item >= 0]
+    end = min(valid_ends) + 1 if valid_ends else min(len(normalized), keyword_pos + radius)
+    snippet = normalized[start:end].strip()
+    if len(snippet) > radius:
+        local_start = max(0, keyword_pos - start - radius // 2)
+        snippet = snippet[local_start : local_start + radius].strip()
+        if local_start > 0:
+            snippet = f"...{snippet}"
+        if start + local_start + radius < end:
+            snippet = f"{snippet}..."
+    return snippet
 
 
 def _tag_steps(steps: list[GuidanceStep], order: int, excerpt: str) -> list[GuidanceStep]:
@@ -407,6 +438,95 @@ def _remote_steps() -> list[GuidanceStep]:
     ]
 
 
+def _vector_edit_steps(task: str) -> list[GuidanceStep]:
+    groups = [
+        (
+            ["move", "translate", "移动", "平移", "偏移"],
+            GuidanceStep(
+                title="移动/平移要素",
+                purpose="按题目给定方向或 X/Y 偏移量移动目标要素。",
+                reason="本题只涉及要素位置移动，不应展开创建、旋转、切割或划分流程。",
+                route=SoftwareRoute(
+                    arcgis_pro="编辑 > 修改要素 > 移动；或 Analysis > Tools > Project/Transform 视具体数据而定",
+                    qgis="处理工具箱 > Translate geometry；或进入编辑模式手动移动",
+                    parameters=["目标图层", "选中要素", "X/Y 偏移量", "坐标系单位"],
+                    checks=["移动前确认投影坐标系；移动后检查属性是否保留和位置是否正确。"],
+                    automation="半自动：偏移量明确后可执行",
+                ),
+                risk="如果题目只要求手工编辑，应给出操作路径，不强行生成批处理脚本。",
+            ),
+        ),
+        (
+            ["rotate", "旋转", "转动"],
+            GuidanceStep(
+                title="旋转要素",
+                purpose="按角度和锚点旋转目标要素。",
+                reason="旋转需要角度方向和旋转中心，不能和移动合并。",
+                route=SoftwareRoute(
+                    arcgis_pro="编辑 > 修改要素 > 旋转",
+                    qgis="处理工具箱 > Rotate features；或编辑模式旋转",
+                    parameters=["目标图层", "旋转角度", "旋转中心"],
+                    checks=["检查角度方向、锚点和旋转后拓扑。"],
+                    automation="半自动：角度和锚点明确后可执行",
+                ),
+            ),
+        ),
+        (
+            ["split", "cut", "切割", "分割", "切分"],
+            GuidanceStep(
+                title="按线切割要素",
+                purpose="使用切割线把目标要素分割为多个部分。",
+                reason="只有题目明确切割/分割时才进入该流程。",
+                route=SoftwareRoute(
+                    arcgis_pro="编辑 > 修改要素 > 分割；或 Analysis > Tools > Split",
+                    qgis="处理工具箱 > Split with lines",
+                    parameters=["目标图层", "切割线图层"],
+                    checks=["切割线必须穿过目标要素；检查属性继承。"],
+                    automation="半自动：切割线明确后可执行",
+                ),
+            ),
+        ),
+        (
+            ["clip", "裁剪", "按范围", "掩膜"],
+            GuidanceStep(
+                title="裁剪矢量图层",
+                purpose="按边界或掩膜范围保留目标要素。",
+                reason="只有题目明确裁剪或按范围保留时才进入该流程。",
+                route=SoftwareRoute(
+                    arcgis_pro="Analysis > Tools > Clip",
+                    qgis="处理工具箱 > Clip",
+                    parameters=["目标图层", "裁剪边界"],
+                    checks=["确认题目要求的是裁剪，不是相交或擦除。"],
+                    automation="半自动：裁剪边界明确后可执行",
+                ),
+            ),
+        ),
+        (
+            ["subdivide", "partition", "网格", "鱼网", "分块"],
+            GuidanceStep(
+                title="细分/分块要素",
+                purpose="按规则把复杂要素拆成更小单元。",
+                reason="只有题目明确分块、鱼网或技术性细分时才进入该流程。",
+                route=SoftwareRoute(
+                    arcgis_pro="Data Management / Cartography 相关分割或网格工具，按题目规则选择",
+                    qgis="处理工具箱 > Subdivide / Create grid",
+                    parameters=["目标图层", "分块规则", "最大节点数或网格尺寸"],
+                    checks=["确认是规则网格、技术性细分，还是按线切割。"],
+                    automation="半自动：分块规则明确后可执行",
+                ),
+            ),
+        ),
+    ]
+    steps: list[GuidanceStep] = []
+    for words, step in groups:
+        if _contains_any(task, words):
+            order = _first_keyword_index(task, words)
+            step.task_order = order
+            step.task_excerpt = _excerpt_at(task, order)
+            steps.append(step)
+    return steps
+
+
 def build_guidance(task: str, scan: dict[str, Any] | None = None) -> GuidanceReport:
     task = task.strip()
     scan = scan or {}
@@ -428,12 +548,18 @@ def build_guidance(task: str, scan: dict[str, Any] | None = None) -> GuidanceRep
         evidence.append("题目包含水文、填洼、流向、汇流或河网等关键词。")
         order = _first_keyword_index(task, hydro_words)
         steps.extend(_tag_steps(_hydrology_steps(), order, _excerpt_at(task, order)))
-    site_words = ["选址", "适宜", "缓冲", "擦除", "相交", "候选区", "道路", "噪声", "最小距离", "距离筛选", "suitability", "site"]
-    if _contains_any(task, site_words):
+    site_words = ["选址", "适宜", "缓冲", "擦除", "相交", "候选区", "噪声", "最小距离", "距离筛选", "suitability", "site"]
+    if _is_site_selection_context(task):
         categories.append((_first_keyword_index(task, site_words), "选址/约束筛选"))
         evidence.append("题目包含选址、适宜性、缓冲、擦除或候选区等关键词。")
         order = _first_keyword_index(task, site_words)
         steps.extend(_tag_steps(_site_steps(), order, _excerpt_at(task, order)))
+    edit_words = ["create feature", "digitize", "new feature", "新增要素", "创建要素", "绘制", "数字化", "新建", "move", "translate", "移动", "平移", "偏移", "rotate", "旋转", "转动", "split", "cut", "切割", "分割", "切分", "clip", "裁剪", "subdivide", "partition", "网格", "鱼网", "分块"]
+    if _is_vector_edit_context(task):
+        order = _first_keyword_index(task, edit_words)
+        categories.append((order, "要素编辑/几何处理"))
+        evidence.append("题目包含移动、旋转、切割、裁剪或创建要素等编辑操作。")
+        steps.extend(_vector_edit_steps(task))
     viewshed_words = ["可视域", "视域", "可视", "观察点", "瞭望塔", "viewshed"]
     if _contains_any(task, viewshed_words):
         categories.append((_first_keyword_index(task, viewshed_words), "可视域分析"))
