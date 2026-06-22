@@ -21,7 +21,7 @@ from .llm_client import PROVIDERS, get_llm_config
 from .operation_catalog import build_operation_modules
 from .planner import plan_task
 from .stat_checker import profile_tables
-from .training_reflections import rebuild_training_index, search_training_reflections
+from .training_reflections import rebuild_training_index, search_training_reflections, training_index_stats
 from .workflow_memory import save_workflow_memory
 
 
@@ -79,6 +79,10 @@ class AutoGISHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/history":
             _json_response(self, load_history())
+            return
+
+        if parsed.path == "/api/training-index":
+            _json_response(self, training_index_stats())
             return
 
         if parsed.path == "/api/ai/providers":
@@ -151,7 +155,8 @@ class AutoGISHandler(BaseHTTPRequestHandler):
 
             if parsed.path == "/api/rebuild-training-index":
                 records = rebuild_training_index()
-                _json_response(self, {"ok": True, "count": len(records)})
+                stats = training_index_stats()
+                _json_response(self, {"ok": True, "count": len(records), "stats": stats})
                 return
 
             if parsed.path == "/api/operation-modules":

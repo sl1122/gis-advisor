@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,23 @@ def rebuild_training_index(source_dir: Path = SOURCE_DIR) -> list[dict[str, Any]
     return records
 
 
+def training_index_stats() -> dict[str, Any]:
+    records = _load_index()
+    files = sorted({item.get("file") for item in records if item.get("file")})
+    updated_at = ""
+    if INDEX_PATH.exists():
+        updated_at = datetime.fromtimestamp(INDEX_PATH.stat().st_mtime).isoformat(timespec="seconds")
+    return {
+        "source_dir": str(SOURCE_DIR),
+        "index_path": str(INDEX_PATH),
+        "records": len(records),
+        "files": len(files),
+        "sample_files": files[:8],
+        "updated_at": updated_at,
+        "exists": INDEX_PATH.exists(),
+    }
+
+
 def _load_index() -> list[dict[str, Any]]:
     if not INDEX_PATH.exists():
         return rebuild_training_index()
@@ -79,6 +97,8 @@ def search_training_reflections(query: str, limit: int = 5, min_score: float = 0
         if not overlap:
             continue
         score = overlap / max(1, min(len(query_tokens), 80))
+        if str(item.get("file") or "").startswith("00-"):
+            score *= 0.35
         if score >= min_score:
             scored.append((score, item))
     scored.sort(key=lambda pair: pair[0], reverse=True)

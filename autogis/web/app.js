@@ -1358,7 +1358,12 @@ $("rebuildTrainingBtn").addEventListener("click", async () => {
     setBusy(true, "status.trainingRebuildRunning");
     const result = await api("/api/rebuild-training-index", { method: "POST", body: JSON.stringify({}) });
     log(result);
-    setStatus(`训练反思索引已重建：${result.count || 0} 条。`, "ok", true);
+    const stats = result.stats || {};
+    setStatus(
+      `训练反思知识库已重建：${result.count || 0} 条，来自 ${stats.files || 0} 个反思文件。这个数量是固定知识库规模，不会随当前题目文件夹变化。`,
+      "ok",
+      true
+    );
   } catch (error) {
     log(String(error));
     setStatus("status.trainingRebuildFailed", "error");
