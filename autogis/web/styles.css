@@ -852,6 +852,19 @@ button:hover {
   color: #263645;
 }
 
+.knowledge-card {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid #cfe0ec;
+  border-left: 5px solid #1e6f91;
+  border-radius: 6px;
+  background: #f4fbff;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
 .guidance-step p {
   margin: 0;
   color: #263645;

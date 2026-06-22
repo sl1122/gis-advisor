@@ -8,6 +8,7 @@ from .data_inspector import inspect_dataset
 from .env import detect_environment
 from .executor import execute_workflow
 from .folder_scanner import scan_folder
+from .knowledge_base import run_regression_cases
 from .planner import plan_task
 from .web_server import run_server
 
@@ -69,6 +70,13 @@ def cmd_web(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_knowledge_test(args: argparse.Namespace) -> int:
+    cases = json.loads(Path(args.cases).read_text(encoding="utf-8"))
+    result = run_regression_cases(cases)
+    _print_json(result)
+    return 0 if result.get("ok") else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="autogis")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -103,6 +111,10 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--port", type=int, default=8765)
     web.add_argument("--no-open", action="store_true")
     web.set_defaults(func=cmd_web)
+
+    knowledge_test = sub.add_parser("knowledge-test", help="Run knowledge-base regression cases.")
+    knowledge_test.add_argument("--cases", default="tests/knowledge_regression.json")
+    knowledge_test.set_defaults(func=cmd_knowledge_test)
 
     return parser
 

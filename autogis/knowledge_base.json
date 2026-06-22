@@ -1,0 +1,145 @@
+{
+  "version": "2026-06-22",
+  "principles": [
+    "Use authoritative tool knowledge as retrieval context, not as blind model training data.",
+    "Separate positive triggers from negative examples to reduce false positives.",
+    "Prefer ArcGIS Pro operation paths for contest guidance, with QGIS alternatives for free reproduction.",
+    "When a task is ambiguous, return candidate routes and confirmation points instead of inventing a single answer."
+  ],
+  "cards": [
+    {
+      "id": "vector_overlay_constraints",
+      "title": "矢量叠置、缓冲与约束筛选",
+      "category": "矢量分析",
+      "positive_keywords": ["缓冲", "擦除", "相交", "叠置", "约束", "道路噪声", "最小距离", "候选区", "建设适宜"],
+      "negative_keywords": ["OD矩阵", "最近设施", "服务区"],
+      "arcgis_path": "Analysis > Tools > Buffer / Erase / Intersect / Select Layer By Location",
+      "qgis_path": "处理工具箱 > Buffer / Difference / Intersection / Extract by Location",
+      "data_requirements": ["投影坐标系下的矢量图层", "距离阈值", "保留层与排除层关系"],
+      "steps": ["统一投影", "按题目条件生成缓冲区", "按保留/排除关系执行擦除或相交", "重新计算面积或距离字段", "输出候选区和统计表"],
+      "checks": ["擦除顺序不能反", "距离单位必须来自投影坐标系", "叠置后重新计算面积"],
+      "confidence": 0.86
+    },
+    {
+      "id": "terrain_slope_aspect_hillshade",
+      "title": "地形分析：坡度、坡向、山体阴影",
+      "category": "地形分析",
+      "positive_keywords": ["DEM", "高程", "坡度", "坡向", "山体阴影", "地形", "地形复杂度", "TCI"],
+      "negative_keywords": ["建筑日照", "太阳阴影", "冬至", "监督分类"],
+      "arcgis_path": "Spatial Analyst Tools > Surface > Slope / Aspect / Hillshade",
+      "qgis_path": "处理工具箱 > GDAL / Raster terrain analysis > Slope / Aspect / Hillshade",
+      "data_requirements": ["DEM 或高程栅格", "投影坐标系", "像元大小和 NoData 规则"],
+      "steps": ["检查 DEM 投影和 NoData", "计算坡度", "计算坡向", "生成山体阴影", "按题目要求统计或制图"],
+      "checks": ["坡度单位确认 degree 或 percent", "连续栅格使用拉伸符号系统", "不要把山体阴影误判为遥感分析"],
+      "confidence": 0.9
+    },
+    {
+      "id": "zonal_statistics_join",
+      "title": "分区统计与属性回连",
+      "category": "统计分析",
+      "positive_keywords": ["分区统计", "区域统计", "乡镇", "均值", "总和", "回连", "Join Field", "GDP", "夜间灯光权重"],
+      "negative_keywords": ["监督分类", "精度评价"],
+      "arcgis_path": "Spatial Analyst Tools > Zonal > Zonal Statistics as Table；Data Management > Joins > Join Field",
+      "qgis_path": "处理工具箱 > Zonal statistics；属性表 > 按字段连接",
+      "data_requirements": ["分区面图层", "指标栅格或统计表", "可连接字段"],
+      "steps": ["确认分区字段", "执行分区统计", "检查 Null 和异常值", "按字段回连结果", "制作专题图"],
+      "checks": ["区划字段唯一性", "统计栅格与分区范围一致", "回连后检查 Null 值"],
+      "confidence": 0.88
+    },
+    {
+      "id": "raster_reclass_calculator",
+      "title": "栅格重分类与栅格计算",
+      "category": "栅格分析",
+      "positive_keywords": ["重分类", "栅格计算", "SetNull", "Con", "阈值", "编码", "土地利用", "耕地", "NoData"],
+      "negative_keywords": ["监督分类", "训练样本", "精度评价"],
+      "arcgis_path": "Spatial Analyst Tools > Reclass > Reclassify；Map Algebra > Raster Calculator",
+      "qgis_path": "处理工具箱 > Reclassify by table；Raster calculator",
+      "data_requirements": ["分类栅格或连续栅格", "编码表或公式", "NoData 处理规则"],
+      "steps": ["确认编码含义", "设置重分类表或公式", "处理 NoData", "输出栅格", "按分类或连续值制图"],
+      "checks": ["离散栅格重采样用最近邻", "NoData 在计算中会传播", "分类图例必须解释编码"],
+      "confidence": 0.84
+    },
+    {
+      "id": "remote_sensing_indices_classification",
+      "title": "遥感指数、监督分类与变化检测",
+      "category": "遥感处理",
+      "positive_keywords": ["遥感", "波段", "NDVI", "NDWI", "Landsat", "Sentinel", "MODIS", "多光谱", "监督分类", "非监督分类", "训练样本", "精度评价", "变化检测"],
+      "negative_keywords": ["山体阴影", "道路噪声", "空地率", "仅制图"],
+      "arcgis_path": "Imagery > Raster Functions / Image Analyst；Spatial Analyst > Raster Calculator",
+      "qgis_path": "处理工具箱 > Orfeo Toolbox / GDAL；栅格计算器；半自动分类插件可选",
+      "data_requirements": ["遥感影像或波段栅格", "波段含义", "研究区边界", "样本或分类体系"],
+      "steps": ["确认波段顺序", "裁剪研究区", "计算指数或构建特征", "分类或变化检测", "精度评价和制图"],
+      "checks": ["波段顺序必须确认", "训练样本与分类体系一致", "影像不等于遥感任务，需有遥感语境"],
+      "confidence": 0.88
+    },
+    {
+      "id": "viewshed_visibility",
+      "title": "可视域与观察点分析",
+      "category": "可视域分析",
+      "positive_keywords": ["可视域", "视域", "可视", "观察点", "瞭望塔", "Viewshed", "observer"],
+      "negative_keywords": ["监督分类", "NDVI"],
+      "arcgis_path": "Spatial Analyst Tools > Surface > Viewshed",
+      "qgis_path": "处理工具箱 > GRASS r.viewshed 或 Visibility Analysis 插件",
+      "data_requirements": ["DEM", "观察点", "观察高度", "目标高度", "最大距离"],
+      "steps": ["确认观察点和高度", "设置目标高度和半径", "运行可视域", "解释可见/不可见编码", "叠加统计或制图"],
+      "checks": ["多点可视域需要确认合并规则", "可见值编码不能混淆", "坐标系和高度单位一致"],
+      "confidence": 0.85
+    },
+    {
+      "id": "network_analysis",
+      "title": "网络分析：最近设施、服务区、OD 矩阵",
+      "category": "网络分析",
+      "positive_keywords": ["网络分析", "最近设施", "服务区", "OD矩阵", "OD 矩阵", "最短路径", "可达性", "道路网络"],
+      "negative_keywords": ["道路噪声", "道路缓冲", "最小距离"],
+      "arcgis_path": "Analysis > Network Analyst > Closest Facility / Service Area / OD Cost Matrix",
+      "qgis_path": "处理工具箱 > QNEAT3 / QGIS Network Analysis",
+      "data_requirements": ["连通道路网络", "成本字段", "设施点或需求点"],
+      "steps": ["检查道路拓扑", "确定距离或时间成本", "构建网络", "运行最近设施/服务区/OD", "统计可达性"],
+      "checks": ["道路缓冲不等于网络分析", "成本字段必须明确", "最近设施可能需要排除自身匹配"],
+      "confidence": 0.82
+    },
+    {
+      "id": "cartography_layout",
+      "title": "专题制图、图例与版式检查",
+      "category": "制图表达",
+      "positive_keywords": ["制图", "专题图", "图例", "比例尺", "指北针", "布局", "导出", "颜色", "符号系统"],
+      "negative_keywords": [],
+      "arcgis_path": "Insert > New Layout；Symbology；Share > Export Layout",
+      "qgis_path": "图层样式；项目 > 新建打印布局；导出 PDF/图片",
+      "data_requirements": ["最终结果图层", "分类或连续变量", "制图范围", "成果格式"],
+      "steps": ["选择合适符号系统", "设置图例和标注", "添加比例尺和指北针", "检查版式层级", "导出成果"],
+      "checks": ["分类变量用离散色", "连续变量用渐变色", "图例命名应对应题目答案"],
+      "confidence": 0.8
+    }
+  ],
+  "anti_patterns": [
+    {
+      "id": "image_not_remote_sensing",
+      "wrong_category": "遥感处理",
+      "when_keywords": ["影像", "底图", "图片"],
+      "unless_keywords": ["遥感", "波段", "NDVI", "Landsat", "Sentinel", "监督分类", "精度评价"],
+      "message": "出现“影像/底图”不能直接判为遥感；需要波段、遥感指数、传感器或分类精度语境。"
+    },
+    {
+      "id": "classification_not_remote_sensing",
+      "wrong_category": "遥感处理",
+      "when_keywords": ["分类", "重分类", "用地分类"],
+      "unless_keywords": ["监督分类", "非监督分类", "训练样本", "精度评价", "遥感", "波段"],
+      "message": "普通分类或重分类应优先归入栅格重分类/土地利用分析，不应自动归入遥感。"
+    },
+    {
+      "id": "road_distance_not_network",
+      "wrong_category": "网络分析",
+      "when_keywords": ["道路", "距离", "噪声", "缓冲"],
+      "unless_keywords": ["网络分析", "OD矩阵", "服务区", "最近设施", "最短路径", "成本字段"],
+      "message": "道路距离或道路噪声通常是缓冲/约束筛选，不等于网络分析。"
+    },
+    {
+      "id": "hillshade_not_remote_sensing",
+      "wrong_category": "遥感处理",
+      "when_keywords": ["山体阴影", "坡度", "坡向", "DEM"],
+      "unless_keywords": ["遥感", "波段", "NDVI", "Landsat", "Sentinel"],
+      "message": "山体阴影、坡度、坡向属于地形分析，不应因为是栅格或影像显示而归入遥感。"
+    }
+  ]
+}

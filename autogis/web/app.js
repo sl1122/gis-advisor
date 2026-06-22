@@ -727,6 +727,28 @@ function renderAnalysis(analysis) {
       `;
     })
     .join("");
+  const knowledge = analysis.knowledge || {};
+  const knowledgeMatches = (knowledge.matches || [])
+    .map((item) => {
+      const keywords = (item.matched_keywords || []).join("、");
+      const checks = (item.checks || []).slice(0, 3).map((check) => `<li>${check}</li>`).join("");
+      return `
+        <div class="knowledge-card">
+          <div class="step-title">
+            <span>${item.title}</span>
+            <span class="tag">${Math.round((item.score || 0) * 100)}%</span>
+          </div>
+          <div class="hint">类别：${item.category || ""}${keywords ? ` | 命中：${keywords}` : ""}</div>
+          <div class="software-route"><strong>ArcGIS Pro：</strong>${item.arcgis_path || "待补充"}</div>
+          <div class="software-route"><strong>QGIS 替代：</strong>${item.qgis_path || "待补充"}</div>
+          ${checks ? `<div class="hint">检查点</div><ul>${checks}</ul>` : ""}
+        </div>
+      `;
+    })
+    .join("");
+  const antiPatterns = (knowledge.anti_patterns || [])
+    .map((item) => `<li>${item.message || item.id}<br><span>避免误判为：${item.wrong_category || ""}</span></li>`)
+    .join("");
   if (guidance) {
     const evidence = (guidance.evidence || []).map((item) => `<li>${item}</li>`).join("");
     const dataRoles = (guidance.data_roles || []).map((item) => `<li>${item}</li>`).join("");
@@ -767,6 +789,8 @@ function renderAnalysis(analysis) {
         ${dataRoles ? `<h4>已识别数据</h4><ul>${dataRoles}</ul>` : ""}
         ${uncertain ? `<h4>缺失或需确认</h4><ul>${uncertain}</ul>` : ""}
         ${formulas ? `<h4>公式与计算关系</h4>${formulas}` : ""}
+        ${knowledgeMatches ? `<h4>知识库依据</h4>${knowledgeMatches}` : ""}
+        ${antiPatterns ? `<h4>反例排除</h4><ul>${antiPatterns}</ul>` : ""}
         ${route ? `<h4>推荐操作路线</h4>${route}` : ""}
         ${checks ? `<h4>结果检查清单</h4><ul>${checks}</ul>` : ""}
         ${trainingMatches ? `<h4>训练反思匹配</h4><ul>${trainingMatches}</ul>` : ""}

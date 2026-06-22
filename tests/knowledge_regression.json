@@ -1,0 +1,32 @@
+[
+  {
+    "name": "道路噪声距离筛选不是网络分析",
+    "task": "根据道路噪声影响距离筛选建设适宜区域，并通过缓冲和擦除得到候选区。",
+    "require_categories": ["矢量分析"],
+    "forbid_categories": ["网络分析", "遥感处理"]
+  },
+  {
+    "name": "山体阴影不是遥感",
+    "task": "使用 DEM 生成坡度、坡向和山体阴影底图。",
+    "require_categories": ["地形分析"],
+    "forbid_categories": ["遥感处理"]
+  },
+  {
+    "name": "普通土地利用重分类不是监督分类",
+    "task": "对土地利用栅格进行重分类，提取耕地编码并统计面积。",
+    "require_categories": ["栅格分析"],
+    "forbid_categories": ["遥感处理"]
+  },
+  {
+    "name": "真正遥感题应识别遥感处理",
+    "task": "使用 Landsat 影像计算 NDVI，并进行监督分类和精度评价。",
+    "require_categories": ["遥感处理"],
+    "forbid_categories": []
+  },
+  {
+    "name": "乡镇 TCI 和分区统计",
+    "task": "根据 DEM 计算 TCI 地形复杂度指数，并按乡镇进行分区统计后回连属性表。",
+    "require_categories": ["地形分析", "统计分析"],
+    "forbid_categories": ["遥感处理"]
+  }
+]

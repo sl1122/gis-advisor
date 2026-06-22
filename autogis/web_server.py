@@ -16,6 +16,7 @@ from .executor import execute_workflow
 from .folder_scanner import scan_folder
 from .guidance import build_guidance
 from .history import clear_history, load_history, record_project, record_run
+from .knowledge_base import match_knowledge
 from .llm_client import PROVIDERS, get_llm_config
 from .operation_catalog import build_operation_modules
 from .planner import plan_task
@@ -138,8 +139,14 @@ class AutoGISHandler(BaseHTTPRequestHandler):
                 else:
                     result = analyze_task_with_llm(task, scan=scan, provider=provider, model=model)
                 result["guidance"] = build_guidance(task, scan=scan).to_dict()
+                result["knowledge"] = match_knowledge(task).to_dict()
                 result["training_matches"] = search_training_reflections(task)
                 _json_response(self, result)
+                return
+
+            if parsed.path == "/api/knowledge-match":
+                task = payload.get("task", "")
+                _json_response(self, {"ok": True, "knowledge": match_knowledge(task).to_dict()})
                 return
 
             if parsed.path == "/api/rebuild-training-index":
